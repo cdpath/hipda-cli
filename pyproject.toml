@@ -1,0 +1,17 @@
+[project]
+name = "hipda-cli"
+version = "0.1.5"
+description = "CLI reader for 4D4Y/HiPDA Discovery forum posts."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4>=4.12",
+  "browser-cookie3>=0.20",
+]
+
+[project.scripts]
+hipda = "hipda_cli.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
