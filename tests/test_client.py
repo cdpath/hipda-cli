@@ -2,7 +2,7 @@ import ssl
 
 from http.cookiejar import Cookie, CookieJar
 
-from hipda_cli.auth import cookie_header_from_browser, chrome_user_agent
+from hipda_cli.auth import LOGIN_URL, chrome_user_agent, cookie_header_from_browser, open_login_page
 from hipda_cli.client import HipdaClient
 
 
@@ -13,7 +13,19 @@ def test_from_env_accepts_ca_file_and_insecure_tls():
     assert client.insecure_tls is True
 
 
-def test_ssl_context_uses_ca_file(monkeypatch):
+def test_from_env_disables_tls_verification_by_default():
+    client = HipdaClient.from_env(cookie="a=b")
+
+    assert client.insecure_tls is True
+
+
+def test_from_env_can_verify_tls():
+    client = HipdaClient.from_env(cookie="a=b", verify_tls=True)
+
+    assert client.insecure_tls is False
+
+
+def test_ssl_context_uses_ca_file_and_verifies_tls(monkeypatch):
     calls = {}
 
     def fake_create_default_context(*, cafile=None):
@@ -22,12 +34,12 @@ def test_ssl_context_uses_ca_file(monkeypatch):
 
     monkeypatch.setattr(ssl, "create_default_context", fake_create_default_context)
 
-    assert HipdaClient(ca_file="/tmp/root.pem").ssl_context() == "context"
+    assert HipdaClient(ca_file="/tmp/root.pem", insecure_tls=False).ssl_context() == "context"
     assert calls == {"cafile": "/tmp/root.pem"}
 
 
-def test_ssl_context_can_disable_verification():
-    context = HipdaClient(insecure_tls=True).ssl_context()
+def test_ssl_context_disables_verification_by_default():
+    context = HipdaClient().ssl_context()
 
     assert context.check_hostname is False
     assert context.verify_mode == ssl.CERT_NONE
@@ -55,6 +67,15 @@ def test_chrome_user_agent_uses_chrome_version_from_plist(monkeypatch, tmp_path)
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
     )
+
+
+def test_open_login_page_uses_google_chrome_on_macos(monkeypatch):
+    calls = []
+    monkeypatch.setattr("hipda_cli.auth.subprocess.run", lambda command, check: calls.append((command, check)))
+
+    open_login_page()
+
+    assert calls == [(["open", "-a", "Google Chrome", LOGIN_URL], False)]
 
 
 def _cookie(name: str, value: str, domain: str) -> Cookie:

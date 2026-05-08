@@ -26,7 +26,7 @@ class HipdaClient:
     cookie: str = ""
     user_agent: str = DEFAULT_USER_AGENT
     ca_file: str | None = None
-    insecure_tls: bool = False
+    insecure_tls: bool = True
     base_url: str = BASE_URL
     timeout: float = 20.0
 
@@ -36,13 +36,17 @@ class HipdaClient:
         cookie: str | None = None,
         user_agent: str | None = None,
         ca_file: str | None = None,
-        insecure_tls: bool = False,
+        insecure_tls: bool = True,
+        verify_tls: bool = False,
     ) -> "HipdaClient":
         return cls(
             cookie=cookie or os.environ.get("HIPDA_COOKIE", "") or load_cookie(),
             user_agent=user_agent or os.environ.get("HIPDA_USER_AGENT", "") or load_user_agent() or DEFAULT_USER_AGENT,
             ca_file=ca_file or os.environ.get("HIPDA_CA_FILE"),
-            insecure_tls=insecure_tls or os.environ.get("HIPDA_INSECURE_TLS", "").lower() in {"1", "true", "yes"},
+            insecure_tls=(
+                not verify_tls
+                and (insecure_tls or os.environ.get("HIPDA_INSECURE_TLS", "").lower() in {"1", "true", "yes"})
+            ),
         )
 
     def ssl_context(self) -> ssl.SSLContext | None:

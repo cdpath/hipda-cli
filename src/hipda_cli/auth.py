@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import os
 import plistlib
+import subprocess
 from pathlib import Path
 
 import browser_cookie3
 
+
+LOGIN_URL = "https://www.4d4y.com/forum/forumdisplay.php?fid=2"
 
 CHROME_INFO_PLIST_PATHS = (
     Path("/Applications/Google Chrome.app/Contents/Info.plist"),
@@ -106,3 +109,7 @@ def import_browser_auth(domain: str = "4d4y.com") -> tuple[str, str]:
     save_cookie(cookie)
     save_user_agent(user_agent)
     return cookie, user_agent
+
+
+def open_login_page() -> None:
+    subprocess.run(["open", "-a", "Google Chrome", LOGIN_URL], check=False)

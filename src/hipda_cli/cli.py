@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .auth import import_browser_auth, save_cookie, save_user_agent
+from .auth import import_browser_auth, open_login_page, save_cookie, save_user_agent
 from .client import BASE_URL, HipdaClient, HipdaClientError
 from .parser import is_login_required_page, parse_forum_listing, parse_thread
 
@@ -16,21 +16,34 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--insecure-tls",
         action="store_true",
-        help="Disable HTTPS certificate verification. Last-resort workaround for local TLS interception.",
+        help="Disable HTTPS certificate verification. This is the default for 4D4Y.",
+    )
+    parser.add_argument(
+        "--verify-tls",
+        action="store_true",
+        help="Enable HTTPS certificate verification.",
     )
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", metavar="{login,list,read}")
 
     subparsers.add_parser("login", help="Import 4D4Y login cookies from Chrome.")
 
-    auth = subparsers.add_parser("auth", help="Manage CLI authentication.")
+    list_parser = subparsers.add_parser("list", help="List Discovery threads.")
+    list_parser.add_argument("--page", type=int, default=1, help="Forum page number.")
+    list_parser.add_argument("--limit", type=int, default=30, help="Maximum number of threads to print.")
+
+    read_parser = subparsers.add_parser("read", help="Read a thread by tid or URL.")
+    read_parser.add_argument("thread", help="Thread id, or a full viewthread.php URL.")
+    read_parser.add_argument("--page", type=int, default=1, help="Thread page number.")
+
+    auth = subparsers.add_parser("auth", help=argparse.SUPPRESS)
     auth_subparsers = auth.add_subparsers(dest="auth_command", required=True)
     save_cookie_parser = auth_subparsers.add_parser("save-cookie", help="Save a pasted 4D4Y Cookie header.")
     save_cookie_parser.add_argument("cookie", nargs="?", help="Cookie header value. Reads stdin if omitted.")
     save_user_agent_parser = auth_subparsers.add_parser("save-user-agent", help="Save the Chrome User-Agent used with the cookie.")
     save_user_agent_parser.add_argument("user_agent", nargs="?", help="User-Agent value. Reads stdin if omitted.")
 
-    discovery = subparsers.add_parser("discovery", help="Read the Discovery channel (fid=2).")
+    discovery = subparsers.add_parser("discovery", help=argparse.SUPPRESS)
     discovery_subparsers = discovery.add_subparsers(dest="discovery_command", required=True)
 
     list_parser = discovery_subparsers.add_parser("list", help="List Discovery threads.")
@@ -40,6 +53,10 @@ def build_parser() -> argparse.ArgumentParser:
     read_parser = discovery_subparsers.add_parser("read", help="Read a thread by tid or URL.")
     read_parser.add_argument("thread", help="Thread id, or a full viewthread.php URL.")
     read_parser.add_argument("--page", type=int, default=1, help="Thread page number.")
+
+    subparsers._choices_actions = [
+        action for action in subparsers._choices_actions if action.dest not in {"auth", "discovery"}
+    ]
 
     return parser
 
@@ -61,8 +78,15 @@ def load_discovery_page(
     user_agent: str | None,
     ca_file: str | None,
     insecure_tls: bool,
+    verify_tls: bool = False,
 ) -> tuple[str, HipdaClient]:
-    client = HipdaClient.from_env(cookie=cookie, user_agent=user_agent, ca_file=ca_file, insecure_tls=insecure_tls)
+    client = HipdaClient.from_env(
+        cookie=cookie,
+        user_agent=user_agent,
+        ca_file=ca_file,
+        insecure_tls=insecure_tls or not verify_tls,
+        verify_tls=verify_tls,
+    )
     html = client.get(path, params)
     if not is_login_required_page(html):
         return html, client
@@ -79,14 +103,22 @@ def load_discovery_page(
         cookie=imported_cookie,
         user_agent=user_agent or imported_user_agent,
         ca_file=ca_file,
-        insecure_tls=insecure_tls,
+        insecure_tls=insecure_tls or not verify_tls,
+        verify_tls=verify_tls,
     )
     return client.get(path, params), client
+
+
+def wait_for_login_confirmation() -> None:
+    if sys.stdin.isatty():
+        input("Log in to 4D4Y in Chrome, then press Enter here...")
 
 
 def run(args: argparse.Namespace) -> int:
     if args.command == "login":
         try:
+            open_login_page()
+            wait_for_login_confirmation()
             import_browser_auth()
         except Exception as exc:
             print(
@@ -123,11 +155,14 @@ def run(args: argparse.Namespace) -> int:
         cookie=args.cookie,
         user_agent=args.user_agent,
         ca_file=args.ca_file,
-        insecure_tls=args.insecure_tls,
+        insecure_tls=args.insecure_tls or not args.verify_tls,
+        verify_tls=args.verify_tls,
     )
 
     try:
-        if args.discovery_command == "list":
+        command = args.discovery_command if args.command == "discovery" else args.command
+
+        if command == "list":
             html, client = load_discovery_page(
                 page=args.page,
                 path="forumdisplay.php",
@@ -135,7 +170,8 @@ def run(args: argparse.Namespace) -> int:
                 cookie=args.cookie,
                 user_agent=args.user_agent,
                 ca_file=args.ca_file,
-                insecure_tls=args.insecure_tls,
+                insecure_tls=args.insecure_tls or not args.verify_tls,
+                verify_tls=args.verify_tls,
             )
             if is_login_required_page(html):
                 print(
@@ -153,7 +189,7 @@ def run(args: argparse.Namespace) -> int:
                 print(f"{thread.tid}\t{thread.title}\t{thread.author} {thread.created_at}{stats}{last}")
             return 0
 
-        if args.discovery_command == "read":
+        if command == "read":
             html, client = load_discovery_page(
                 page=args.page,
                 path="viewthread.php",
@@ -161,7 +197,8 @@ def run(args: argparse.Namespace) -> int:
                 cookie=args.cookie,
                 user_agent=args.user_agent,
                 ca_file=args.ca_file,
-                insecure_tls=args.insecure_tls,
+                insecure_tls=args.insecure_tls or not args.verify_tls,
+                verify_tls=args.verify_tls,
             )
             if is_login_required_page(html):
                 print(
@@ -187,6 +224,11 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv:
+        parser.print_help()
+        return 0
     return run(parser.parse_args(argv))
 
 

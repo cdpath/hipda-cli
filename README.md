@@ -2,42 +2,31 @@
 
 CLI reader for the 4D4Y/HiPDA Discovery channel (`fid=2`).
 
-The site uses browser/session checks, so direct unauthenticated requests may return a Cloudflare challenge. Normally, just use the CLI after logging in through Chrome:
-
-```bash
-uvx --from . hipda discovery list --limit 20
-uvx --from . hipda discovery read 3446553
-```
-
-If the automatic import needs a nudge, run:
+The site uses browser/session checks, so direct unauthenticated requests may return a Cloudflare challenge. Log in once through Chrome:
 
 ```bash
 uvx --from . hipda login
 ```
 
-This imports only 4D4Y cookies from Chrome and saves the matching Chrome user agent. Manual setup still works:
+That opens 4D4Y in Google Chrome. After you finish logging in, return to the terminal and press Enter. Then read Discovery:
 
 ```bash
-uvx --from . hipda auth save-cookie 'Cookie: your_cookie_header'
-uvx --from . hipda auth save-user-agent 'Mozilla/5.0 ... Chrome/147.0.0.0 Safari/537.36'
+uvx --from . hipda list --limit 20
+uvx --from . hipda read 3446553
 ```
 
-The cookie is stored at `~/.config/hipda/cookie` and the user agent is stored at `~/.config/hipda/user-agent`, both with `0600` permissions. You can still override them per command with `HIPDA_COOKIE` / `--cookie` and `HIPDA_USER_AGENT` / `--user-agent`.
+`hipda list` also tries to import automatically if Chrome is already logged in, so most of the time you can skip straight to reading. The old `hipda discovery list` and `hipda discovery read` commands still work.
+
+The cookie is stored at `~/.config/hipda/cookie` and the user agent is stored at `~/.config/hipda/user-agent`, both with `0600` permissions. You can override them per command with `HIPDA_COOKIE` / `--cookie` and `HIPDA_USER_AGENT` / `--user-agent`.
 
 You can also pass a browser user agent:
 
 ```bash
-HIPDA_USER_AGENT='Mozilla/5.0 ...' uvx --from . hipda discovery list
+HIPDA_USER_AGENT='Mozilla/5.0 ...' uvx --from . hipda list
 ```
 
-If Python reports `CERTIFICATE_VERIFY_FAILED` but Chrome can open the site, your network may be using a local HTTPS inspection certificate that Chrome trusts and Python does not. Prefer passing that root certificate:
+The CLI disables HTTPS certificate verification by default because 4D4Y often fails from Python environments where Chrome still works. To verify certificates, pass a trusted root certificate and `--verify-tls`:
 
 ```bash
-uvx --from . hipda --ca-file /path/to/root-ca.pem discovery list
-```
-
-As a last resort, you can disable TLS verification for this CLI call:
-
-```bash
-uvx --from . hipda --insecure-tls discovery list
+uvx --from . hipda --verify-tls --ca-file /path/to/root-ca.pem list
 ```
