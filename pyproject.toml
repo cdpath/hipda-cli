@@ -1,6 +1,6 @@
 [project]
 name = "hipda-cli"
-version = "0.1.9"
+version = "0.1.10"
 description = "CLI reader for 4D4Y/HiPDA Discovery forum posts."
 readme = "README.md"
 requires-python = ">=3.11"
